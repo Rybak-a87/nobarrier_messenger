@@ -1,0 +1,75 @@
+nobarrier/
+├── api/                      # Входные точки (REST, WebSocket, gRPC и т.д.)
+│   ├── routers/
+│   │   ├── accounts.py       # User endpoints
+│   │   ├── chats.py          # Chat endpoints
+│   │   └── __init__.py
+│   ├── websockets/           # Если будут WS
+│   │   ├── chats_ws.py
+│   │   └── __init__.py
+│   └── dependencies.py       # Общие Depends
+│
+├── core/                     # Инфраструктура проекта
+│   ├── config.py             # Settings (Pydantic BaseSettings)
+│   ├── security.py           # Hash, JWT
+│   ├── logging.py            # Логирование
+│   └── __init__.py
+│
+├── database/                 # Всё, что связано с БД
+│   ├── models/
+│   │   ├── accounts.py       # User model
+│   │   ├── chats.py          # Chat model
+│   │   ├── base.py           # Base = DeclarativeBase
+│   │   └── __init__.py
+│   ├── migrations/           # Alembic
+│   ├── session.py            # engine, get_session()
+│   └── __init__.py
+│
+├── domain/                   # Чистая бизнес-логика (DDD слой)
+│   ├── accounts/
+│   │   ├── entities.py       # UserEntity, WeakPasswordError
+│   │   ├── value_objects.py  # Email, Password, ...
+│   │   └── __init__.py
+│   ├── chats/
+│   │   ├── entities.py
+│   │   └── __init__.py
+│   └── __init__.py
+│
+├── schemas/                  # Pydantic схемы (DTO)
+│   ├── accounts.py           # UserCreate, UserRead, ...
+│   ├── chats.py              # ChatCreate, ChatRead
+│   └── __init__.py
+│
+├── services/                 # Прикладная логика (работа с БД, доменом)
+│   ├── accounts.py           # UserService
+│   ├── chats.py              # ChatService
+│   └── __init__.py
+│
+├── shared/                   # Общие утилиты/валидации
+│   ├── validators.py         # validate_password_complexity
+│   ├── exceptions.py         # Общие ошибки
+│   ├── utils.py              # Разные хелперы
+│   └── __init__.py
+│
+├── tests/                    # Тесты
+│   ├── test_accounts.py
+│   ├── test_chats.py
+│   └── __init__.py
+│
+├── main.py                   # Точка входа (FastAPI app)
+└── __init__.py
+
+PGPASSWORD="9d1e931927b5d60de8e189cb6646e013020c1834f91341ea0129a949c81a185c" psql -h localhost -p 5432 -U root -d nobarrier_db
+
+# Остановить все контейнеры
+docker stop $(docker ps -aq)
+
+# Удалить все контейнеры
+docker rm $(docker ps -aq)
+Удалить все образы
+docker rmi $(docker images -q)
+Удалить все тома (по желанию, очищает данные БД)
+docker volume rm $(docker volume ls -q)
+
+Очистить всё одним махом
+docker system prune -a --volumes

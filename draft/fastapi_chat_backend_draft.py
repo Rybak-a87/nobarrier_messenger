@@ -1,4 +1,10 @@
 """
+
+pip install alembic
+alembic init migrations
+https://habr.com/ru/articles/513328/
+
+
 ICQ-like Minimal Chat Backend (MVP)
 FastAPI + PostgreSQL (async) + JWT + WebSockets
 

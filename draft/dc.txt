@@ -1,0 +1,397 @@
+version: "2"
+services:
+
+  celery:
+    build: .
+    container_name: celery-pdf
+    hostname: celery
+    env_file:
+      - images/common.env
+      - images/backend/aws.secret
+      - images/rabbitmq/rabbitmq.secret
+    command: /bin/sh ./src/commands/start_celery.sh
+    depends_on:
+      - rabbitmq
+    volumes:
+      - ./:/home/completecase/projects/completecase-pdf
+    stdin_open: true
+    restart: always
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  rabbitmq:
+    image: rabbitmq:3.8-rc-management
+    env_file:
+      - images/common.env
+      - images/rabbitmq/rabbitmq.secret
+    container_name: rabbitmq-pdf
+    restart: always
+    ports:
+      - "5674:5672"
+      - "15674:15672"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+networks:
+  default:
+    external:
+      name: completecase_default
+
+
+
+------------------------------------------------
+
+
+version: "2"
+services:
+
+  completecase:
+    dns:
+    - 8.8.8.8
+    - 8.8.4.4
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    container_name: completecase
+    hostname: backend
+    env_file:
+      - .env
+    command: /bin/sh ./commands/start_unit.sh
+    depends_on:
+      - memcached
+      - rabbitmq
+      - mysql
+    volumes:
+      - ./:/srv/completecase
+      - ./static_content:/srv/static_content
+    ports:
+      - "8000:8000"
+      - "8014:8014"
+      - "8080:8080"
+      - "8089:8089"
+    tty: true
+    stdin_open: true
+    restart: always
+    user: ${SYSTEM_USER}
+    environment:
+      - PYTHONSTARTUP=/srv/completecase/.shell_startup.py
+      - PYTHONBREAKPOINT=ipdb.set_trace
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  celery:
+    dns:
+    - 8.8.8.8
+    - 8.8.4.4
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    hostname: celery
+    env_file:
+      - .env
+    command: /bin/sh ./commands/start_celery.sh
+    depends_on:
+      - memcached
+      - rabbitmq
+      - mysql
+    volumes:
+      - ./:/srv/completecase
+      - ./static_content:/srv/static_content
+    stdin_open: true
+    restart: always
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  celery_vicidial:
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    hostname: celery_vicidial
+    env_file:
+      - .env
+    command: /bin/sh ./commands/start_celery_vicidial.sh
+    depends_on:
+      - memcached
+      - rabbitmq
+      - mysql
+    volumes:
+      - ./:/srv/completecase
+      - ./static_content:/srv/static_content
+    stdin_open: true
+    restart: always
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  celery_customerio:
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    hostname: celery_customerio
+    env_file:
+      - .env
+    command: /bin/sh ./commands/start_celery_customerio.sh
+    depends_on:
+      - memcached
+      - rabbitmq
+      - mysql
+    volumes:
+      - ./:/srv/completecase
+      - ./static_content:/srv/static_content
+    stdin_open: true
+    restart: always
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  celery_reporting:
+    dns:
+    - 8.8.8.8
+    - 8.8.4.4
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    hostname: celery_reporting
+    env_file:
+    - .env
+    command: /bin/sh ./commands/start_celery_reporting.sh
+    depends_on:
+    - memcached
+    - rabbitmq
+    - mysql
+    volumes:
+    - ./:/srv/completecase
+    - ./static_content:/srv/static_content
+    stdin_open: true
+    restart: always
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  celery_pdf:
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    hostname: celery_pdf
+    env_file:
+      - .env
+    command: /bin/sh ./commands/start_celery_pdf.sh
+    volumes:
+      - ./:/srv/completecase
+    stdin_open: true
+    restart: "no"
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  celery_analytics:
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    hostname: analytics
+    env_file:
+      - .env
+      - .env_app
+    command: /bin/sh ./commands/start_celery_analytics.sh
+    volumes:
+      - ./:/srv/completecase
+    stdin_open: true
+    restart: "no"
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  celery_synchronizer:
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    hostname: analytics
+    env_file:
+      - .env
+      - .env_app
+    command: /bin/sh ./commands/start_celery_synchronizer.sh
+    volumes:
+      - ./:/srv/completecase
+    stdin_open: true
+    restart: "no"
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  celery_posthog:
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    hostname: celery_posthog
+    env_file:
+      - .env
+    command: /bin/sh ./commands/start_celery_posthog.sh
+    depends_on:
+      - memcached
+      - rabbitmq
+      - mysql
+    volumes:
+      - ./:/srv/completecase
+      - ./static_content:/srv/static_content
+    stdin_open: true
+    restart: always
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  celerybeat:
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    container_name: celerybeat
+    hostname: celerybeat
+    env_file:
+      - .env
+    command: /bin/sh ./commands/start_celerybeat.sh
+    depends_on:
+      - memcached
+      - rabbitmq
+      - mysql
+    volumes:
+      - ./:/srv/completecase
+    stdin_open: true
+    restart: always
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  memcached:
+    image: memcached:latest
+    container_name: memcached
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+  rabbitmq:
+    image: rabbitmq:3.8-rc-management
+    env_file: .env
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+  jupyter:
+    command: sh -c "/srv/completecase/src/manage.py shell_plus --notebook"
+    image: ${DOCKER_REPO}/completecase:${DOCKER_BUILD}
+    container_name: jupyter
+    ports:
+      - "${JUPYTER_PORT}:${JUPYTER_PORT}"
+    env_file:
+      - .env
+    volumes:
+      - ./:/srv/completecase
+      - ./static_content:/srv/static_content
+    stdin_open: true
+    restart: always
+    user: ${SYSTEM_USER}
+    depends_on:
+      - memcached
+      - rabbitmq
+      - mysql
+
+  nginx:
+    build: ./images/nginx/dev
+    container_name: nginx
+    restart: always
+    depends_on:
+      - completecase
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8001:8001"
+      - "8003:8003"
+      - "8007:8007"
+      - "8015:8015"
+      - "8443:8443"
+    volumes:
+      - ./images/nginx/dev/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./images/nginx/dev/pagespeed:/etc/nginx/pagespeed:ro
+      - ./images/nginx/dev/mime.types:/etc/nginx/mime.types:ro
+      - ./images/nginx/dev/sites-enabled:/etc/nginx/sites-enabled:ro
+      - ./images/nginx/dev/templates:/usr/share/nginx/html:ro
+      - ./images/nginx/dev/conf:/etc/nginx/ssl
+    volumes_from:
+      - completecase:ro
+
+  mysql:
+    image: mysql:8.0.22
+    env_file: .env
+    container_name: mysql
+    restart: always
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - mysql_backups:/home/mysql/backups
+    security_opt:
+      - seccomp:unconfined
+    ports:
+      - "3306:3306"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+volumes:
+  mysql_data: {}
+  mysql_backups: {}
+
+
+-----------------------------------------------------------
+
+version: "2"
+
+services:
+
+  nginx-react:
+    container_name: nginx-react
+    networks:
+      - completecase_default
+    build: .
+    env_file: .env
+    restart: always
+
+networks:
+  completecase_default:
+    external: true
+

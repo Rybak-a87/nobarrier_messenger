@@ -45,7 +45,7 @@
     async function register() {
       const username = document.getElementById("username").value;
       const password = document.getElementById("password").value;
-      const res = await fetch("http://localhost:8000/register", {
+      const res = await fetch("http://0.0.0.0:8000/auth/sign-up", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({username, password})
@@ -56,7 +56,7 @@
     async function login() {
       const username = document.getElementById("username").value;
       const password = document.getElementById("password").value;
-      const res = await fetch("http://localhost:8000/login", {
+      const res = await fetch("http://0.0.0.0:8000/auth/sign-in", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({username, password})
@@ -68,7 +68,7 @@
         document.getElementById("app").style.display = "flex";
 
         // load current user
-        const r = await fetch("http://localhost:8000/me", {
+        const r = await fetch("http://0.0.0.0:8000/users/me", {
           headers: {Authorization: "Bearer " + token}
         });
         me = await r.json();
@@ -79,7 +79,7 @@
     }
 
     async function loadContacts() {
-      const res = await fetch("http://localhost:8000/users", {
+      const res = await fetch("http://0.0.0.0:8000/users/full-list", {
         headers: {Authorization: "Bearer " + token}
       });
       const users = await res.json();
@@ -98,7 +98,7 @@
       document.getElementById("chatTitle").textContent = "Chat with " + user.username;
       document.getElementById("chat").innerHTML = "";
 
-      const res = await fetch("http://localhost:8000/chats", {
+      const res = await fetch("http://0.0.0.0:8000/chats", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -110,7 +110,7 @@
       chatId = c.chat_id;
 
       if (ws) ws.close();
-      ws = new WebSocket(`ws://localhost:8000/ws/chats/${chatId}?token=${token}`);
+      ws = new WebSocket(`ws://0.0.0.0:8000/ws/chats/${chatId}?token=${token}`);
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
         const div = document.createElement("div");
