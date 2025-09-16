@@ -1,0 +1,71 @@
+from alembic import op
+import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import sessionmaker
+from nobarrier.database.session import engine
+from nobarrier.models.user import User
+
+async def async_upgrade():
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        session.add_all([
+            User(username="alice", email="alice@example.com"),
+            User(username="bob", email="bob@example.com"),
+        ])
+        await session.commit()
+
+def upgrade():
+    asyncio.run(async_upgrade())
+
+def downgrade():
+    pass  # можно тоже через async удалить пользователей
+
+-------------------------------------
+
+from alembic import op
+import sqlalchemy as sa
+
+def upgrade():
+    # получаем bind (engine/connection)
+    conn = op.get_bind()
+
+    # вставляем несколько пользователей
+    conn.execute(
+        sa.text("""
+            INSERT INTO "user" (username, email) VALUES
+            ('alice', 'alice@example.com'),
+            ('bob', 'bob@example.com'),
+            ('carol', 'carol@example.com')
+        """)
+    )
+
+def downgrade():
+    conn = op.get_bind()
+    conn.execute(sa.text("""
+        DELETE FROM "user" WHERE username IN ('alice', 'bob', 'carol')
+    """))
+
+----------------------------------------
+
+
+"""add initial users
+
+Revision ID: 123456abcdef
+Revises:
+Create Date: 2025-09-25 12:00:00
+"""
+from alembic import op
+import sqlalchemy as sa
+
+# revision identifiers, used by Alembic.
+revision = '123456abcdef'
+down_revision = None
+branch_labels = None
+depends_on = None
+
+def upgrade():
+    pass
+
+def downgrade():
+    pass
+

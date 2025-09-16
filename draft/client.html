@@ -1,109 +1,174 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Family ICQ MVP</title>
+  <meta charset="UTF-8">
+  <title>FastAPI Chat Test</title>
   <style>
-    body { font-family: sans-serif; margin: 20px; }
-    #chat { border: 1px solid #ccc; height: 300px; overflow-y: auto; padding: 10px; }
-    .msg { margin: 5px 0; }
-    .me { color: blue; }
-    .other { color: green; }
+    body { font-family: sans-serif; max-width: 900px; margin: 20px auto; }
+    input, button { margin: 5px; padding: 5px; }
+    textarea { width: 100%; height: 80px; }
+    .chat-box { border: 1px solid #ccc; padding: 10px; margin-top: 10px; height: 200px; overflow-y: auto; }
   </style>
 </head>
 <body>
-  <h2>Family Chat</h2>
+  <h1>🚀 FastAPI Chat Test</h1>
 
-  <div id="auth">
-    <input id="username" placeholder="Username" />
-    <input id="password" type="password" placeholder="Password" />
-    <button onclick="register()">Register</button>
-    <button onclick="login()">Login</button>
+  <h2>🔑 Аутентификация</h2>
+  <div>
+    <input id="username" placeholder="Username">
+    <input id="password" type="password" placeholder="Password">
+    <button onclick="signUp()">Sign Up</button>
+    <button onclick="signIn()">Sign In</button>
   </div>
-
-  <div id="chatBox" style="display:none;">
-    <h3>Chat</h3>
-    <div id="chat"></div>
-    <input id="msgInput" placeholder="Type message..." />
-    <button onclick="sendMsg()">Send</button>
+  <div>
+    <button onclick="getCurrentUser()">/current-user</button>
+    <button onclick="getAllUsers()">/full-list</button>
   </div>
+  <pre id="authResult"></pre>
 
-  <script>
-    let token = null;
-    let ws = null;
-    let chatId = null;
+  <h2>💬 Чаты</h2>
+  <div>
+    <input id="memberIds" placeholder="Member IDs (через запятую)">
+    <label><input id="isGroup" type="checkbox"> Групповой чат</label>
+    <button onclick="createChat()">Создать чат</button>
+    <button onclick="listChats()">Список чатов</button>
+  </div>
+  <pre id="chatsResult"></pre>
 
-    async function register() {
-      const username = document.getElementById("username").value;
-      const password = document.getElementById("password").value;
-      const res = await fetch("http://localhost:8000/register", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({username, password})
-      });
-      alert(await res.text());
-    }
+  <h2>📨 Сообщения</h2>
+  <div>
+    <input id="chatId" placeholder="Chat ID">
+    <button onclick="getMessages()">Загрузить сообщения</button>
+  </div>
+  <div class="chat-box" id="messagesBox"></div>
 
-    async function login() {
-      const username = document.getElementById("username").value;
-      const password = document.getElementById("password").value;
-      const res = await fetch("http://localhost:8000/login", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({username, password})
-      });
-      const data = await res.json();
-      token = data.access_token;
-      if (token) {
-        document.getElementById("auth").style.display = "none";
-        document.getElementById("chatBox").style.display = "block";
-        await initChat();
-      }
-    }
+  <h2>🔗 WebSocket</h2>
+  <div>
+    <input id="wsChatId" placeholder="Chat ID">
+    <button onclick="connectWS()">Подключиться</button>
+  </div>
+  <div>
+    <input id="wsMessage" placeholder="Ваше сообщение">
+    <button onclick="sendWSMessage()">Отправить</button>
+  </div>
+  <div class="chat-box" id="wsBox"></div>
 
-    async function initChat() {
-      // получаем список чатов, создаём новый если нет
-      let res = await fetch("http://localhost:8000/chats", {
-        headers: {Authorization: "Bearer " + token}
-      });
-      let chats = await res.json();
-      if (chats.length > 0) {
-        chatId = chats[0].chat_id;
-      } else {
-        // создаем чат хотя бы сам с собой
-        res = await fetch("http://localhost:8000/me", {
-          headers: {Authorization: "Bearer " + token}
-        });
-        const me = await res.json();
-        res = await fetch("http://localhost:8000/chats", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + token
-          },
-          body: JSON.stringify({member_ids:[me.id], is_group:false})
-        });
-        const c = await res.json();
-        chatId = c.chat_id;
-      }
+<script>
+const API_BASE = "http://0.0.0.0:8000";
+let token = null;
+let ws = null;
 
-      ws = new WebSocket(`ws://localhost:8000/ws/chats/${chatId}?token=${token}`);
-      ws.onmessage = (e) => {
-        const data = JSON.parse(e.data);
-        const div = document.createElement("div");
-        div.className = "msg";
-        div.innerHTML = `<span class="${data.sender_id==0?'me':'other'}">${data.sender}: </span>${data.content}`;
-        document.getElementById("chat").appendChild(div);
-      };
-    }
+// --- AUTH ---
+async function signUp() {
+  const res = await fetch(`${API_BASE}/auth/sign-up`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: document.getElementById("username").value,
+      password: document.getElementById("password").value
+    })
+  });
+  const data = await res.json();
+  token = data.access_token;
+  document.getElementById("authResult").textContent = JSON.stringify(data, null, 2);
+}
 
-    function sendMsg() {
-      const msg = document.getElementById("msgInput").value;
-      if (ws && msg) {
-        ws.send(msg);
-        document.getElementById("msgInput").value = "";
-      }
-    }
-  </script>
+async function signIn() {
+  const res = await fetch(`${API_BASE}/auth/sign-in`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: document.getElementById("username").value,
+      password: document.getElementById("password").value
+    })
+  });
+  const data = await res.json();
+  token = data.access_token;
+  document.getElementById("authResult").textContent = JSON.stringify(data, null, 2);
+}
+
+async function getCurrentUser() {
+  const res = await fetch(`${API_BASE}/current-user`, {
+    headers: { Authorization: "Bearer " + token }
+  });
+  document.getElementById("authResult").textContent = JSON.stringify(await res.json(), null, 2);
+}
+
+async function getAllUsers() {
+  const res = await fetch(`${API_BASE}/full-list`, {
+    headers: { Authorization: "Bearer " + token }
+  });
+  document.getElementById("authResult").textContent = JSON.stringify(await res.json(), null, 2);
+}
+
+// --- CHATS ---
+async function createChat() {
+  const ids = document.getElementById("memberIds").value.split(",").map(x => parseInt(x.trim())).filter(x => !isNaN(x));
+  const isGroup = document.getElementById("isGroup").checked;
+  const res = await fetch(`${API_BASE}/chats/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + token
+    },
+    body: JSON.stringify({ member_ids: ids, is_group: isGroup })
+  });
+  document.getElementById("chatsResult").textContent = JSON.stringify(await res.json(), null, 2);
+}
+
+async function listChats() {
+  const res = await fetch(`${API_BASE}/chats/`, {
+    headers: { Authorization: "Bearer " + token }
+  });
+  document.getElementById("chatsResult").textContent = JSON.stringify(await res.json(), null, 2);
+}
+
+// --- MESSAGES ---
+async function getMessages() {
+  const chatId = document.getElementById("chatId").value;
+  const res = await fetch(`${API_BASE}/chats/${chatId}/messages`, {
+    headers: { Authorization: "Bearer " + token }
+  });
+  const data = await res.json();
+  const box = document.getElementById("messagesBox");
+  box.innerHTML = "";
+  data.forEach(msg => {
+    const div = document.createElement("div");
+    div.textContent = `${msg.sender_id}: ${msg.content}`;
+    box.appendChild(div);
+  });
+}
+
+// --- WEBSOCKET ---
+function connectWS() {
+  const chatId = document.getElementById("wsChatId").value;
+  if (!token) {
+    alert("Сначала залогинься!");
+    return;
+  }
+  ws = new WebSocket(`ws://0.0.0.0:8000/ws/chats/${chatId}?token=${token}`);
+  ws.onopen = () => {
+    const box = document.getElementById("wsBox");
+    box.innerHTML += "<div>✅ Connected</div>";
+  };
+  ws.onmessage = (event) => {
+    const box = document.getElementById("wsBox");
+    box.innerHTML += "<div>" + event.data + "</div>";
+    box.scrollTop = box.scrollHeight;
+  };
+  ws.onclose = () => {
+    const box = document.getElementById("wsBox");
+    box.innerHTML += "<div>❌ Disconnected</div>";
+  };
+}
+
+function sendWSMessage() {
+  const msg = document.getElementById("wsMessage").value;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ content: msg }));
+    document.getElementById("wsMessage").value = "";
+  }
+}
+</script>
 </body>
 </html>
