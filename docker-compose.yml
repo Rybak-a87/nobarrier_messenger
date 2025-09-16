@@ -1,0 +1,39 @@
+version: "3"
+
+services:
+  postgresdb:
+    build:
+      context: ./docker/postgresql
+      dockerfile: Dockerfile
+    enviroment:
+      - POSTGRES_PASSWORD=admin
+    volumes:
+      - ./docker/postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  nobarrier:
+    build:
+      context: ./docker/backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    volumes:
+      # reboot if has change
+      - ./:/usr/src/nobarrier
+    depends_on:
+      - postgresdb
+    ports:
+      - "8000:8000"
+
+  nginx:
+    biuld:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    depends_on:
+      - postgresdb
+      - nobarrier
+    ports:
+      - "80:80"
+    # volumes:
+      # - ./staticfiles/:/staticfiles

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Family ICQ MVP</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; }
+    #sidebar { width: 200px; border-right: 1px solid #ccc; padding: 10px; }
+    #chatBox { flex: 1; display: flex; flex-direction: column; }
+    #chat { flex: 1; border-bottom: 1px solid #ccc; overflow-y: auto; padding: 10px; }
+    .msg { margin: 5px 0; }
+    .me { color: blue; }
+    .other { color: green; }
+    .contact { padding: 5px; cursor: pointer; }
+    .contact:hover { background: #eee; }
+    #auth { padding: 20px; }
+  </style>
+</head>
+<body>
+  <div id="auth">
+    <h2>Family Chat Login</h2>
+    <input id="username" placeholder="Username" /><br><br>
+    <input id="password" type="password" placeholder="Password" /><br><br>
+    <button onclick="register()">Register</button>
+    <button onclick="login()">Login</button>
+  </div>
+
+  <div id="main" style="display:none; width:100%; height:100%; display:flex;">
+    <div id="sidebar">
+      <h3>Contacts</h3>
+      <div id="contacts"></div>
+    </div>
+
+    <div id="chatBox">
+      <h3 id="chatTitle">Select a contact</h3>
+      <div id="chat"></div>
+      <div style="padding: 10px;">
+        <input id="msgInput" placeholder="Type message..." style="width:70%;" />
+        <button onclick="sendMsg()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let token = null;
+    let ws = null;
+    let chatId = null;
+    let currentUser = null;
+    let selectedContact = null;
+
+    async function register() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+      const res = await fetch("http://localhost:8000/register", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({username, password})
+      });
+      alert(await res.text());
+    }
+
+    async function login() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+      const res = await fetch("http://localhost:8000/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({username, password})
+      });
+      const data = await res.json();
+      token = data.access_token;
+      if (token) {
+        document.getElementById("auth").style.display = "none";
+        document.getElementById("main").style.display = "flex";
+        await loadMe();
+        await loadContacts();
+      }
+    }
+
+    async function loadMe() {
+      const res = await fetch("http://localhost:8000/me", {
+        headers: {Authorization: "Bearer " + token}
+      });
+      currentUser = await res.json();
+    }
+
+    async function loadContacts() {
+      const res = await fetch("http://localhost:8000/users", {
+        headers: {Authorization: "Bearer " + token}
+      });
+      const users = await res.json();
+      const container = document.getElementById("contacts");
+      container.innerHTML = "";
+      users.filter(u => u.id !== currentUser.id).forEach(u => {
+        const div = document.createElement("div");
+        div.className = "contact";
+        div.innerText = u.username;
+        div.onclick = () => openChat(u);
+        container.appendChild(div);
+      });
+    }
+
+    async function openChat(contact) {
+      selectedContact = contact;
+      document.getElementById("chatTitle").innerText = "Chat with " + contact.username;
+      document.getElementById("chat").innerHTML = "";
+
+      // проверим, есть ли чат
+      let res = await fetch("http://localhost:8000/chats", {
+        headers: {Authorization: "Bearer " + token}
+      });
+      let chats = await res.json();
+      let existing = chats.find(c => c.members.includes(contact.id));
+      if (existing) {
+        chatId = existing.chat_id;
+      } else {
+        res = await fetch("http://localhost:8000/chats", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token
+          },
+          body: JSON.stringify({member_ids:[contact.id], is_group:false})
+        });
+        const c = await res.json();
+        chatId = c.chat_id;
+      }
+
+      // подключение WS
+      if (ws) ws.close();
+      ws = new WebSocket(`ws://localhost:8000/ws/chats/${chatId}?token=${token}`);
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        const div = document.createElement("div");
+        div.className = "msg";
+        div.innerHTML = `<span class="${data.sender_id==currentUser.id?'me':'other'}">${data.sender}: </span>${data.content}`;
+        document.getElementById("chat").appendChild(div);
+      };
+
+      // загрузка истории
+      res = await fetch(`http://localhost:8000/chats/${chatId}/messages`, {
+        headers: {Authorization: "Bearer " + token}
+      });
+      const history = await res.json();
+      history.forEach(m => {
+        const div = document.createElement("div");
+        div.className = "msg";
+        div.innerHTML = `<span class="${m.sender_id==currentUser.id?'me':'other'}">${m.sender}: </span>${m.content}`;
+        document.getElementById("chat").appendChild(div);
+      });
+    }
+
+    function sendMsg() {
+      const msg = document.getElementById("msgInput").value;
+      if (ws && msg) {
+        ws.send(msg);
+        document.getElementById("msgInput").value = "";
+      }
+    }
+  </script>
+</body>
+</html>

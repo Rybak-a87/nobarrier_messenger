@@ -1,0 +1,10 @@
+from fastapi import Depends
+from sqlalchemy.future import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.responses import JSONResponse
+
+@app.get("/users")
+async def list_users(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = await db.execute(select(User))
+    users = result.scalars().all()
+    return [{"id": u.id, "username": u.username} for u in users]

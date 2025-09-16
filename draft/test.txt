@@ -1,0 +1,83 @@
+"""
+Draft FastAPI chat backend (JWT auth + Postgres + WebSockets)
++ simple integration tests with httpx and pytest-asyncio
+
+Run locally (requires Python 3.11+):
+    pip install fastapi uvicorn[standard] sqlalchemy asyncpg passlib[bcrypt] python-jose[cryptography] httpx pytest pytest-asyncio
+    export DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/chatdb"
+    uvicorn fastapi_chat_backend:app --reload
+
+Run tests:
+    pytest -q
+"""
+# ... (same backend code as before) ...
+
+# --------------------------- Users ----------------------------------------
+from fastapi import Depends
+from sqlalchemy.future import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+@app.get("/users")
+async def list_users(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = await db.execute(select(User))
+    users = result.scalars().all()
+    return [{"id": u.id, "username": u.username} for u in users]
+
+# --------------------------- Tests ----------------------------------------
+# To run: pytest -q fastapi_chat_backend.py
+import pytest
+from httpx import AsyncClient
+
+@pytest.mark.asyncio
+async def test_register_and_login():
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        # Register new user
+        r = await ac.post("/register", json={"username": "alice", "password": "secret123"})
+        assert r.status_code == 201, r.text
+        data = r.json()
+        assert data["username"] == "alice"
+
+        # Login with same user
+        r = await ac.post("/login", json={"username": "alice", "password": "secret123"})
+        assert r.status_code == 200
+        token = r.json()["access_token"]
+        assert token
+
+        # Use token to call /me
+        headers = {"Authorization": f"Bearer {token}"}
+        r = await ac.get("/me", headers=headers)
+        assert r.status_code == 200
+        me = r.json()
+        assert me["username"] == "alice"
+
+@pytest.mark.asyncio
+async def test_chat_flow():
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        # Create 2 users
+        await ac.post("/register", json={"username": "u1", "password": "pw123456"})
+        await ac.post("/register", json={"username": "u2", "password": "pw123456"})
+
+        r1 = await ac.post("/login", json={"username": "u1", "password": "pw123456"})
+        r2 = await ac.post("/login", json={"username": "u2", "password": "pw123456"})
+        t1 = r1.json()["access_token"]
+        t2 = r2.json()["access_token"]
+
+        # user1 creates chat with user2
+        headers1 = {"Authorization": f"Bearer {t1}"}
+        payload = {"member_ids": [2], "is_group": False}
+        r = await ac.post("/chats", json=payload, headers=headers1)
+        assert r.status_code == 200
+        chat_id = r.json()["chat_id"]
+
+        # user1 sends a message
+        ws_url = f"ws://test/ws/chats/{chat_id}?token={t1}"
+        # note: websockets can't be tested via httpx easily, here we just check REST
+        r = await ac.get(f"/chats/{chat_id}/messages", headers=headers1)
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+        # user2 can also list chats
+        headers2 = {"Authorization": f"Bearer {t2}"}
+        r = await ac.get("/chats", headers=headers2)
+        assert r.status_code == 200
+        assert any(c["chat_id"] == chat_id for c in r.json())
